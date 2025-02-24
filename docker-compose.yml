@@ -1,0 +1,19 @@
+
+services:
+  flask-app:
+    build: .
+    ports:
+      - "5000:5000"
+    depends_on:
+      - redis
+    networks:
+      - backend
+
+  redis:
+    image: redis:latest
+    networks:
+      - backend
+
+networks:
+  backend:
+    driver: bridge

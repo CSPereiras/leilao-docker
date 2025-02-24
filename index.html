@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Leilões</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/axios/1.4.0/axios.min.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            padding: 20px;
+            background-color: #f4f4f4;
+        }
+        .container {
+            display: flex;
+            max-width: 1000px;
+            margin: auto;
+            gap: 20px;
+        }
+        .section {
+            flex: 1;
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0px 0px 10px rgba(0, 0, 0, 0.1);
+        }
+        .auction {
+            border: 1px solid #ddd;
+            padding: 15px;
+            margin-top: 10px;
+            border-radius: 5px;
+            background: #fff;
+        }
+        button {
+            margin-top: 10px;
+            padding: 10px 15px;
+            cursor: pointer;
+            border: none;
+            border-radius: 5px;
+            background: #28a745;
+            color: white;
+            font-size: 16px;
+        }
+        button:hover {
+            background: #218838;
+        }
+        input {
+            width: 100%;
+            padding: 8px;
+            margin: 5px 0;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="section">
+            <h1>Criar Leilão</h1>
+            <input id="title" type="text" placeholder="Título">
+            <input id="description" type="text" placeholder="Descrição">
+            <input id="initialPrice" type="number" placeholder="Preço Inicial">
+            <input id="endTime" type="datetime-local">
+            <button onclick="createAuction()">Criar</button>
+        </div>
+        <div class="section">
+            <h1>Leilões Ativos</h1>
+            <div id="auctions"></div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE_URL = "http://0.0.0.0:5000";
+        let userId = localStorage.getItem("userId") || generateUserId();
+
+        function generateUserId() {
+            const id = "user-" + Math.random().toString(36).substr(2, 9);
+            localStorage.setItem("userId", id);
+            return id;
+        }
+
+        function createAuction() {
+            const title = document.getElementById('title').value;
+            const description = document.getElementById('description').value;
+            const initialPrice = document.getElementById('initialPrice').value;
+            const endTime = new Date(document.getElementById('endTime').value).getTime() / 1000;
+            
+            axios.post(`${API_BASE_URL}/create_auction`, {
+                title,
+                description,
+                initial_price: initialPrice,
+                end_time: endTime
+            }).then(() => {
+                loadAuctions();
+            }).catch(err => console.error("Erro ao criar leilão", err));
+        }
+
+        function loadAuctions() {
+            axios.get(`${API_BASE_URL}/get_keys`).then(res => {
+                const keys = res.data;
+                document.getElementById('auctions').innerHTML = '';
+                keys.forEach(key => {
+                    axios.get(`${API_BASE_URL}/get_auction/${key}`).then(auctionRes => {
+                        const auction = auctionRes.data;
+                        const div = document.createElement('div');
+                        div.className = 'auction';
+                        div.innerHTML = `
+                            <h3>${auction.title}</h3>
+                            <p>${auction.description}</p>
+                            <p><strong>Preço Atual:</strong> ${auction.bids.length > 0 ? Math.max(...auction.bids.map(b => b.amount)) : auction.initial_price}</p>
+                            <input type="number" id="bid-${key}" placeholder="Valor do Lance">
+                            <button onclick="placeBid('${key}')">Dar Lance</button>
+                        `;
+                        document.getElementById('auctions').appendChild(div);
+                    });
+                });
+            }).catch(err => console.error("Erro ao carregar leilões", err));
+        }
+
+        function placeBid(auctionId) {
+            const amount = document.getElementById(`bid-${auctionId}`).value;
+            if (!amount) {
+                alert("Digite um valor para o lance.");
+                return;
+            }
+            
+            axios.post(`${API_BASE_URL}/place_bid/${auctionId}`, { username: userId, amount: Number(amount) })
+                .then(() => loadAuctions())
+                .catch(err => console.error("Erro ao dar lance", err));
+        }
+
+        function setupAutoRefresh() {
+            setInterval(loadAuctions, 5000);
+            const observer = new MutationObserver(() => loadAuctions());
+            observer.observe(document.getElementById('auctions'), { childList: true });
+        }
+
+        window.onload = () => {
+            loadAuctions();
+            setupAutoRefresh();
+        };
+    </script>
+</body>
+</html>
